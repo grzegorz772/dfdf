@@ -14,15 +14,16 @@ app.use(express.json({ limit: "15mb" }));
 // Initialize Gemini client lazily to prevent crashing on boot if key is temporarily missing
 let aiClient: GoogleGenAI | null = null;
 
-function getGeminiClient(): GoogleGenAI {
-  if (aiClient) return aiClient;
-  
-  const apiKey = process.env.GEMINI_API_KEY;
+function getGeminiClient(customApiKey?: string): GoogleGenAI {
+  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Klucz GEMINI_API_KEY nie został znaleziony. Skonfiguruj go w panelu Settings > Secrets w AI Studio.");
+    throw new Error("Klucz API nie został znaleziony. Skonfiguruj go w panelu Settings > Secrets w AI Studio lub podaj własny klucz.");
   }
   
-  aiClient = new GoogleGenAI({
+  // If no custom key, try to use the singleton
+  if (!customApiKey && aiClient) return aiClient;
+  
+  const client = new GoogleGenAI({
     apiKey: apiKey,
     httpOptions: {
       headers: {
@@ -31,7 +32,10 @@ function getGeminiClient(): GoogleGenAI {
     },
   });
   
-  return aiClient;
+  // Cache the singleton if no custom key provided
+  if (!customApiKey) aiClient = client;
+  
+  return client;
 }
 
 // Health check endpoint
@@ -42,7 +46,7 @@ app.get("/api/health", (req, res) => {
 // Translation batch verification endpoint
 app.post("/api/verify-batch", async (req, res) => {
   try {
-    const { items, columns = [], context = "", model = "gemini-3.5-flash" } = req.body;
+    const { items, columns = [], context = "", model = "gemini-3.5-flash", apiKey = "" } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "Brak danych lub niepoprawny format (oczekiwano tablicy 'items')." });
@@ -51,7 +55,7 @@ app.post("/api/verify-batch", async (req, res) => {
 
     let ai;
     try {
-      ai = getGeminiClient();
+      ai = getGeminiClient(apiKey || undefined);
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Błąd konfiguracji klucza API." });
       return;

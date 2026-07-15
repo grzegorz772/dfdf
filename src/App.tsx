@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Upload, Play, Pause, Download, Search, FileText, CheckCircle, 
   AlertTriangle, RefreshCw, Sliders, BookOpen, ArrowRight, Trash2, 
-  Edit2, Save, Languages, FileSpreadsheet, Plus, Check, X, HelpCircle, AlertCircle
+  Edit2, Save, Languages, FileSpreadsheet, Plus, Check, X, HelpCircle, AlertCircle, Key
 } from "lucide-react";
 import { CsvRow, VerificationStats, AppConfig } from "./types";
 import { parseCsv, stringifyCsv, detectDelimiter } from "./utils/csv";
@@ -28,7 +28,8 @@ export default function App() {
     customContext: "",
     batchSize: 20,
     maxLimit: "all",
-    model: "gemini-3.5-flash"
+    model: "gemini-3.5-flash",
+    customApiKey: ""
   });
 
   // Stany pętli weryfikacyjnej
@@ -289,7 +290,8 @@ export default function App() {
               return isNaN(index) ? col : headers[index];
             }),
             context: config.customContext,
-            model: config.model
+            model: config.model,
+            apiKey: config.customApiKey
           })
         });
 
@@ -897,6 +899,21 @@ export default function App() {
                         })}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Własny klucz API */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                      <Key className="w-3.5 h-3.5 text-slate-400" />
+                      Twój klucz API (Opcjonalnie)
+                    </label>
+                    <input
+                      type="password"
+                      value={config.customApiKey}
+                      onChange={(e) => setConfig(prev => ({ ...prev, customApiKey: e.target.value }))}
+                      placeholder="Wpisz swój klucz API"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-inner placeholder-slate-400"
+                    />
                   </div>
 
                   {/* Dodatkowy kontekst */}

@@ -34,5 +34,6 @@ export interface AppConfig {
   batchSize: number;
   maxLimit: number | 'all';
   model: string;
+  customApiKey?: string;
 }
 
