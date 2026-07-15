@@ -5,7 +5,7 @@ import {
   AlertTriangle, RefreshCw, Sliders, BookOpen, ArrowRight, Trash2, 
   Edit2, Save, Languages, FileSpreadsheet, Plus, Check, X, HelpCircle, AlertCircle, Key
 } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { CsvRow, VerificationStats, AppConfig } from "./types";
 import { parseCsv, stringifyCsv, detectDelimiter } from "./utils/csv";
 import { getSampleRows, SAMPLE_HEADERS } from "./utils/sampleData";
@@ -286,23 +286,69 @@ export default function App() {
         }
 
         const ai = new GoogleGenAI({ apiKey: config.customApiKey });
-        const model = ai.models.getGenerativeModel({ model: config.model });
         
-        const prompt = JSON.stringify({
-          items: batchItems,
-          columns: config.translationColumns.map(col => {
-            const index = parseInt(col);
-            return isNaN(index) ? col : headers[index];
-          }),
-          context: config.customContext,
+        const columnsMapped = config.translationColumns.map(col => {
+          const index = parseInt(col);
+          return isNaN(index) ? col : headers[index];
         });
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const data = JSON.parse(text.replace(/```json\n?|\n?```/g, ""));
+        const promptText = `Jesteś zaawansowanym wielojęzycznym systemem weryfikacji i korekty słownictwa.
+Twoim zadaniem jest ocena i korekta tłumaczeń słówek lub fraz z języka angielskiego (English) na wybrane języki docelowe, reprezentowane przez nazwy kolumn: ${JSON.stringify(columnsMapped)}.
+Dla każdego słówka otrzymujesz oryginalne słowo w języku angielskim (original) oraz dotychczasowe automatyczne tłumaczenia (translations) w poszczególnych kolumnach docelowych.
+Dzięki temu, że widzisz tłumaczenia we wszystkich językach na raz, zyskujesz lepszy kontekst semantyczny (zazwyczaj większość tłumaczeń określa jedno poprawne znaczenie słowa, a jedno lub dwa mogą być błędnymi kalkami lub homonimami o złym znaczeniu).
+
+Zasady:
+1. Przeanalizuj słowo oryginalne w zestawieniu ze wszystkimi podanymi tłumaczeniami docelowymi.
+2. Dla każdej kolumny (języka):
+   - Jeśli aktualne tłumaczenie w tej kolumnie jest poprawne, naturalne i pasuje do głównego, zamierzonego znaczenia słowa oryginalnego (widocznego z kontekstu pozostałych poprawnych tłumaczeń), pozostaw je bez zmian.
+   - Jeśli tłumaczenie jest niepoprawne, sztuczne, zbyt dosłowne (np. błędna kalka językowa) lub odnosi się do niewłaściwego znaczenia wyrazu wieloznacznego, popraw je i wpisz ulepszone, poprawne i powszechne tłumaczenie w tym języku docelowym.
+3. NIE podawaj żadnych wyjaśnień, komentarzy ani alternatyw. Zwróć tylko i wyłącznie poprawione słowo dla każdej kolumny w strukturze wyjściowej.
+
+${config.customContext ? `DODATKOWY KONTEKST OD UŻYTKOWNIKA (weź go pod uwagę przy ocenie i korekcie): "${config.customContext}".` : ""}
+
+Oto lista słówek do zweryfikowania:
+${JSON.stringify(batchItems.map((it) => ({ id: it.id, original: it.original, translations: it.translations })), null, 2)}`;
+
+        const response = await ai.models.generateContent({
+          model: config.model,
+          contents: promptText,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              description: "Lista zweryfikowanych wierszy z poprawkami dla poszczególnych kolumn językowych",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING, description: "ID wiersza" },
+                  corrections: {
+                    type: Type.ARRAY,
+                    description: "Lista poprawek dla poszczególnych kolumn językowych",
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        column: { type: Type.STRING, description: "Nazwa kolumny (np. pl, fr, es)" },
+                        corrected: { type: Type.STRING, description: "Skorygowane lub niezmienione (jeśli poprawne) tłumaczenie w tym języku" }
+                      },
+                      required: ["column", "corrected"]
+                    }
+                  }
+                },
+                required: ["id", "corrections"]
+              }
+            }
+          }
+        });
+
+        const responseText = response.text;
+        if (!responseText) {
+          throw new Error("Model Gemini nie zwrócił żadnego tekstu.");
+        }
+
+        const verifiedItems = JSON.parse(responseText.trim());
         const resultsMap = new Map<string, any>();
-        if (data.results && Array.isArray(data.results)) {
-          data.results.forEach((res: any) => {
+        if (Array.isArray(verifiedItems)) {
+          verifiedItems.forEach((res: any) => {
             resultsMap.set(res.id, res);
           });
         }
@@ -800,8 +846,8 @@ export default function App() {
                       onChange={(e) => setConfig(prev => ({ ...prev, model: e.target.value }))}
                       className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-sm"
                     >
-                      <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                      <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                      <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                      <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
                       <option value="gemma-2-27b-it">Gemma 2 27B</option>
                       <option value="gemma-4-31b-it">Gemma 4 31B</option>
                     </select>
