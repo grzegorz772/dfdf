@@ -1,0 +1,6 @@
+{
+  "name": "Anki CSV Vocabulary Validator",
+  "description": "Weryfikuj i poprawiaj tłumaczenia słówek w plikach CSV do Anki za pomocą AI. Przetwarzaj duże pliki w bezpiecznych paczkach i eksportuj gotowe zestawy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
