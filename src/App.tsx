@@ -5,6 +5,7 @@ import {
   AlertTriangle, RefreshCw, Sliders, BookOpen, ArrowRight, Trash2, 
   Edit2, Save, Languages, FileSpreadsheet, Plus, Check, X, HelpCircle, AlertCircle, Key
 } from "lucide-react";
+import { GoogleGenAI } from "@google/genai";
 import { CsvRow, VerificationStats, AppConfig } from "./types";
 import { parseCsv, stringifyCsv, detectDelimiter } from "./utils/csv";
 import { getSampleRows, SAMPLE_HEADERS } from "./utils/sampleData";
@@ -280,27 +281,25 @@ export default function App() {
       addLog(`Weryfikacja paczki (słówka od ${batchIndices[0] + 1} do ${batchIndices[batchIndices.length - 1] + 1})...`, "info");
 
       try {
-        const response = await fetch("/api/verify-batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: batchItems,
-            columns: config.translationColumns.map(col => {
-              const index = parseInt(col);
-              return isNaN(index) ? col : headers[index];
-            }),
-            context: config.customContext,
-            model: config.model,
-            apiKey: config.customApiKey
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || errData.details || "Nieznany błąd serwera");
+        if (!config.customApiKey) {
+          throw new Error("Proszę wpisać klucz API w ustawieniach.");
         }
 
-        const data = await response.json();
+        const ai = new GoogleGenAI({ apiKey: config.customApiKey });
+        const model = ai.models.getGenerativeModel({ model: config.model });
+        
+        const prompt = JSON.stringify({
+          items: batchItems,
+          columns: config.translationColumns.map(col => {
+            const index = parseInt(col);
+            return isNaN(index) ? col : headers[index];
+          }),
+          context: config.customContext,
+        });
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const data = JSON.parse(text.replace(/```json\n?|\n?```/g, ""));
         const resultsMap = new Map<string, any>();
         if (data.results && Array.isArray(data.results)) {
           data.results.forEach((res: any) => {
@@ -801,10 +800,10 @@ export default function App() {
                       onChange={(e) => setConfig(prev => ({ ...prev, model: e.target.value }))}
                       className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition shadow-sm"
                     >
-                      <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-                      <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Wymaga API Key)</option>
+                      <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                       <option value="gemma-2-27b-it">Gemma 2 27B</option>
-                      <option value="gemma-4-31b-it">Gemma 4 31B (Open Weights)</option>
+                      <option value="gemma-4-31b-it">Gemma 4 31B</option>
                     </select>
                   </div>
                   
